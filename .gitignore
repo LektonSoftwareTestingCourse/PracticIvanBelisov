@@ -33,5 +33,3 @@ mvnw.cmd
 
 # Виртуальное окружение
 .venv
-
-# comment to trigger ci
