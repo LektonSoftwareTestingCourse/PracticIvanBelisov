@@ -8,3 +8,4 @@ mcc: grocery, restaurant, electronics, travel
 
 IF [card_status] <> "ACTIVE" THEN [amount_vs_daily] = "below" AND [amount_vs_monthly] = "below" AND [amount_vs_balance] = "below";
 IF [expiry] = "expired" THEN [amount_vs_daily] = "below" AND [amount_vs_monthly] = "below" AND [amount_vs_balance] = "below";
+IF [card_status] = "EXPIRED" THEN [expiry] = "expired";
