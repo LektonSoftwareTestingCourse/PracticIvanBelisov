@@ -1,0 +1,11 @@
+operation_type:   create, read_one, read_all, delete
+pan:              valid_16, invalid_length, fail
+bin:              valid_6, invalid_length, invalid_letters
+expiry_date:      valid_MM, invalid_over_12, invalid_00
+cardholder_name:  valid, empty_string
+limit_param:      positive, zero, negative
+card_status:      active, deleted
+
+IF [operation_type] = "create" THEN [pan] = "valid_16" AND [limit_param] = "positive" AND [card_status] = "active";
+IF [operation_type] = "read_one" OR [operation_type] = "delete" THEN [bin] = "valid_6" AND [expiry_date] = "valid_MM" AND [cardholder_name] = "valid" AND [limit_param] = "positive";
+IF [operation_type] = "read_all" THEN [pan] = "valid_16" AND [bin] = "valid_6" AND [expiry_date] = "valid_MM" AND [cardholder_name] = "valid" AND [card_status] = "active";
