@@ -1,0 +1,74 @@
+@startuml a4-2-sequence-declined
+title Sequence Diagram - Declined (Карта BLOCKED)
+
+autonumber
+skinparam maxMessageSize 150
+skinparam sequence {
+    ArrowColor #333333
+    LifeLineBorderColor #999999
+    LifeLineBackgroundColor #EEEEEE
+    ParticipantBorderColor #999999
+    ParticipantBackgroundColor #FAFAFA
+}
+
+participant "Терминал" as T #BBDEFB
+participant "Gateway" as GW #FFE0B2
+participant "Switch" as SW #C8E6C9
+participant "Merchant" as MERCH #BBDEFB
+participant "Authorization" as AUTH #C8E6C9
+participant "Bin Lookup" as BIN #F8BBD0
+participant "Card Mgmt" as CMS #C8E6C9
+database "PostgreSQL" as DB #E0E0E0
+queue "RabbitMQ" as RMQ #FFF9C4
+participant "Logger" as LOG #D1C4E9
+
+T -> GW : POST /api/transactions
+activate GW
+
+GW -> SW : forward (route)
+activate SW
+
+SW -> AUTH : POST /api/internal/authorize
+activate AUTH
+
+AUTH -> CMS : GET /api/cards/{pan}
+activate CMS
+CMS -->> AUTH : Card {status: BLOCKED}
+deactivate CMS
+
+AUTH -> BIN : GET /api/bin/{bin}
+activate BIN
+BIN -->> AUTH : issuerId
+deactivate BIN
+
+AUTH -> AUTH : status == BLOCKED\n→ DECLINED (CARD_BLOCKED)
+note right of AUTH: Цепочка обрывается:\nлимиты не проверяются,\nрезерв не создается
+
+AUTH -->> SW : HTTP 403 FORBIDDEN\n{DeclineOutcome, responseCode: 05}
+deactivate AUTH
+
+SW -> MERCH : POST /api/simulator/merchant/fee\n(sync)
+activate MERCH
+MERCH -->> SW : fee
+deactivate MERCH
+
+SW -> RMQ : publish declined transaction\n(async)
+activate RMQ
+RMQ -->> SW : ack
+deactivate RMQ
+
+SW -->> GW : DECLINED
+deactivate SW
+
+GW -->> T : HTTP 200 OK\n(body: DECLINED, code: 05)
+deactivate GW
+
+RMQ -> LOG : consume transaction-log
+activate LOG
+LOG -> DB : JDBC: INSERT transactions\n(status DECLINED)
+activate DB
+DB -->> LOG : OK
+deactivate DB
+deactivate LOG
+
+@enduml

@@ -1,0 +1,33 @@
+@startuml a6-1-card-status
+title A6. State-transition: Статусы карты (Card.status)
+
+skinparam state {
+    BackgroundColor #FAFAFA
+    BorderColor #999999
+    ArrowColor #333333
+}
+
+[*] --> ACTIVE : создание карты
+
+ACTIVE --> INACTIVE : patchCard / bulkUpdateStatus
+INACTIVE --> ACTIVE : patchCard / bulkUpdateStatus
+
+ACTIVE --> BLOCKED : patchCard / bulkUpdateStatus
+BLOCKED --> ACTIVE : patchCard / bulkUpdateStatus
+
+ACTIVE --> EXPIRED : patchCard / bulkUpdateStatus
+EXPIRED --> ACTIVE : patchCard / bulkUpdateStatus
+
+note right of EXPIRED
+  Автоматического перехода по expiryDate нет.
+  Статус меняется только явным вызовом patchCard / bulkUpdateStatus.
+  Метод withData направление перехода не ограничивает.
+end note
+
+ACTIVE --> DELETED : deleteCard
+INACTIVE --> DELETED : deleteCard
+BLOCKED --> DELETED : deleteCard
+EXPIRED --> DELETED : deleteCard
+
+DELETED --> [*]
+@enduml

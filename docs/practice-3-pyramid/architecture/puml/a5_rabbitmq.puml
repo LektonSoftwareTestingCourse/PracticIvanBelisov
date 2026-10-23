@@ -1,0 +1,65 @@
+@startuml a5-rabbitmq
+title A5. Топология RabbitMQ (Exchange, Queues, DLX/DLQ, Outbox)
+
+top to bottom direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam ArrowThickness 1.2
+skinparam nodesep 40
+skinparam ranksep 40
+
+package "Поток 1: Журнал транзакций" #F5F5F5 {
+    rectangle "Switch\n(LoggerClient)" as SW #C8E6C9
+    hexagon "Topic Exchange\n**smp.transactions**" as TX_EX #FFF9C4
+    queue "Queue\n**transaction-log**\n[x-max-delivery=3]" as TX_Q #E3F2FD
+    rectangle "TransactionLogListener\n(Consumer)" as TX_C #D1C4E9
+
+    hexagon "Direct DLX\n**smp.transactions.dlx**" as TX_DLX #FFCCBC
+    queue "DLQ\n**transaction-log-dlq**\n[TTL 60 s]" as TX_DLQ #FFCCBC
+
+    SW ..> TX_EX : AMQP publish\n(key: transaction.log)
+    TX_EX ..> TX_Q : binding\n(key: transaction.log)
+    TX_Q ..> TX_C : AMQP consume
+    TX_Q ..> TX_DLX : dead-letter\n(key: transaction-log)
+    TX_DLX ..> TX_DLQ : binding\n(key: transaction-log)
+}
+
+package "Поток 2: События карт (Outbox)" #F5F5F5 {
+    rectangle "Card-Management\n(OutboxEventProcessorImpl)" as CMS #C8E6C9
+    database "Таблица outbox_event\n[PENDING / PROCESSED / FAILED]" as OUTBOX #E0E0E0
+    hexagon "Topic Exchange\n**smp.card-events**" as CARD_EX #FFF9C4
+    queue "Queue\n**card-notifications**\n[x-max-delivery=3]" as CARD_Q #E3F2FD
+    rectangle "CardEventListener\n(Consumer)" as CARD_C #D1C4E9
+
+    hexagon "Direct DLX\n**smp.card-events.dlx**" as CARD_DLX #FFCCBC
+    queue "DLQ\n**card-notifications-dlq**\n[TTL 60 s]" as CARD_DLQ #FFCCBC
+
+    CMS --> OUTBOX : JDBC (save event)
+    OUTBOX --> CMS : JDBC (scheduled read,\nmax retry=3)
+    CMS ..> CARD_EX : AMQP publish\n(key: card.<EventClass>)
+    CARD_EX ..> CARD_Q : binding\n(key: card.*)
+    CARD_Q ..> CARD_C : AMQP consume
+    CARD_Q ..> CARD_DLX : dead-letter\n(key: card-notifications)
+    CARD_DLX ..> CARD_DLQ : binding\n(key: card-notifications)
+}
+
+database "PostgreSQL" as DB #E0E0E0
+rectangle "Web Dashboard" as WEB #FFF3E0
+
+TX_C ---> DB : JDBC\n(INSERT transactions)
+CARD_C ---> DB : JDBC\n(INSERT card_notifications)
+TX_C .[#7B1FA2].> WEB : WebSocket\n/ws/transactions
+
+legend right
+  |= Фигура / Цвет |= Значение |
+  | <back:#C8E6C9>   </back> | Отправитель (Producer) |
+  | <back:#FFF9C4>   </back> | Exchange (Точка обмена) |
+  | <back:#E3F2FD>   </back> | Основная очередь |
+  | <back:#D1C4E9>   </back> | Получатель (Consumer) |
+  | <back:#FFCCBC>   </back> | Dead-Letter Exchange / DLQ |
+  | <back:#E0E0E0>   </back> | Хранилище (БД / Таблица) |
+  | ───▷ | Синхронный вызов (JDBC) |
+  | ┈┈┈▷ | Асинхронный вызов (AMQP / WebSocket) |
+endlegend
+@enduml

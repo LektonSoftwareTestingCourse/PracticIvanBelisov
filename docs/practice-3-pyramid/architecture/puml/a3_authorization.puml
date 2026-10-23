@@ -1,0 +1,61 @@
+@startuml authorization-component
+title Компонентная диаграмма Authorization Service
+
+top to bottom direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontSize 11
+skinparam ArrowThickness 1.2
+skinparam nodesep 35
+skinparam ranksep 45
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+rectangle "Switch" as SW #EEEEEE
+rectangle "Card-Management Service" as CMSX #E3F2FD
+rectangle "Bin Lookup" as BINX #F8BBD0
+database "PostgreSQL\nlimit_usage, rrn_seq" as DBA #E0E0E0
+
+package "Authorization Service" #E8F5E9 {
+    rectangle "AuthControllerImpl\nPOST /api/internal/authorize\nPOST /api/internal/rollback" as AC
+    rectangle "AuthServiceImpl\nauthorize: карта → статус → срок → баланс → лимиты → резерв\nrollback, generateRRN, generateAuthCode" as AS
+    rectangle "DeclineOutcome\nпричина отказа → responseCode" as DO
+    rectangle "CardManagementClientImpl\nHTTP-клиент, HTTP-код → исключение" as CMC
+    rectangle "BinLookupClient\nHTTP-клиент, timeout 3s/5s" as BLC
+    rectangle "LimitUsageRepository\nupsertLimitUsage, fetchRrnBlock" as LUR
+    rectangle "AuthorizationEventNotifierImpl" as EVN
+    rectangle "AuthorizationLogEventListenerImpl" as EVL
+    rectangle "CleanupServiceImpl\ncron: 2-е число месяца" as CLS
+    rectangle "HealthControllerImpl" as HCTRL
+    rectangle "HealthServiceImpl" as HSVC
+}
+
+SW --> AC : HTTP\nPOST /api/internal/authorize\nPOST /api/internal/rollback
+AC --> AS : authorize() / rollback()
+AS --> DO : формирование причины отказа
+AS --> CMC : getCard() / reserve() / rollback()
+AS --> BLC : getIssuerId()
+AS --> LUR : лимиты и блоки RRN
+AS --> EVN : notify()
+EVN ..> EVL : событие авторизации
+CLS --> LUR : удаление устаревших лимитов
+
+CMC --> CMSX : HTTP\nGET /api/cards/{pan}\nPOST /api/cards/{pan}/reserve\nPOST /api/cards/{pan}/rollback
+BLC --> BINX : HTTP GET /api/bin/{bin}
+LUR --> DBA : JDBC
+
+HCTRL --> HSVC : healthCheckAllServices()
+HSVC --> CMSX : HTTP GET /health
+
+legend bottom
+  |= Цвет |= Значение |
+  | <back:#E8F5E9> </back> | Компоненты Authorization Service |
+  | <back:#EEEEEE> </back> | Внешний вызывающий сервис |
+  | <back:#E3F2FD> </back> | Внешний сервис Card-Management |
+  | <back:#F8BBD0> </back> | Внешний API Bin Lookup |
+  | <back:#E0E0E0> </back> | PostgreSQL |
+  | Сплошная стрелка | Вызов компонента, HTTP или JDBC |
+  | Пунктирная стрелка | Передача события |
+endlegend
+
+@enduml

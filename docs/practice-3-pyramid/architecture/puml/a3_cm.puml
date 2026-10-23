@@ -1,0 +1,69 @@
+@startuml card-management-component
+title Компонентная диаграмма Card-Management Service
+
+top to bottom direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontSize 11
+skinparam ArrowThickness 1.2
+skinparam nodesep 35
+skinparam ranksep 45
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+rectangle "Authorization, Gateway,\nTerminal Simulator" as CL #EEEEEE
+database "PostgreSQL\ncards, reservations, reservation_rollbacks,\noutbox_event, bin_issuers" as DBC #E0E0E0
+queue "RabbitMQ\nexchange: smp.card-events" as RMQ #FFF9C4
+
+package "Card-Management Service" #E3F2FD {
+    rectangle "CardController\n/api/cards: POST, GET, PATCH, DELETE\n/reserve, /rollback, /bulk-update" as CC
+    rectangle "CardGeneratorController\nPOST /api/cards/generate" as CGC
+    rectangle "GlobalExceptionHandler\nисключение → HTTP-код: 400, 402, 404, 409" as GEH
+
+    rectangle "CardServiceImpl\ncreateCard, patchCard, deleteCard, reserve, rollback" as CS
+    rectangle "CardGeneratorService\nстатусы 95 / 3 / 2 %" as CGS
+
+    rectangle "Card, Reservation, ReservationRollback\nдоменные правила: startReservation,\nwithData, deleted, startRollback" as CARD    rectangle "LuhnValidator\nгенерация PAN" as LUHN
+    rectangle "TransactionRunnerImpl\nграницы транзакции БД" as TR
+
+    rectangle "CardRepositoryPersistenceAdapter\nReservationRepositoryPersistenceAdapter\nReservationRollbackRepositoryPersistenceAdapter" as REPO
+
+    rectangle "CardEventNotifierImpl\nCardOutboxEvent → outbox;\nпрочие события → listeners" as CEN
+    rectangle "OutboxEventProcessorImpl\nsave: PENDING\nprocessSingleEvent: PROCESSED / retry / FAILED" as OEP
+    rectangle "OutboxProcessor\n@Scheduled каждые 1000 ms" as OP
+    rectangle "OutboxJpaAdapter\nfindPending: retryCount < 3" as OJA
+}
+
+CL --> CC : HTTP
+CL --> CGC : HTTP
+CC --> CS : вызовы методов сервиса
+CGC --> CGS : generate()
+CGS --> CS : createCards()
+CC ..> GEH : обработка исключений
+
+CS --> CARD : доменные операции
+CS --> LUHN : генерация PAN
+CS --> TR : транзакционная граница
+CS --> REPO : сохранение состояния
+CS --> CEN : notifyListeners()
+
+CEN --> OEP : save(CardOutboxEventData)
+OP --> OJA : findPending()\nretryCount < 3
+OP --> OEP : processSingleEvent()
+OEP --> OJA : сохранение / обновление статуса
+
+REPO --> DBC : JDBC
+OJA --> DBC : JDBC
+OEP ..> RMQ : AMQP convertAndSend()\nexchange: smp.card-events\nkey: card.<EventName>
+
+legend bottom
+  |= Цвет |= Значение |
+  | <back:#E3F2FD> </back> | Компоненты Card-Management Service |
+  | <back:#EEEEEE> </back> | Внешние клиенты |
+  | <back:#E0E0E0> </back> | PostgreSQL |
+  | <back:#FFF9C4> </back> | RabbitMQ |
+  | Сплошная стрелка | Вызов компонента или JDBC |
+  | Пунктирная стрелка | Логическая связь или событие (смотри подпись) |
+endlegend
+
+@enduml

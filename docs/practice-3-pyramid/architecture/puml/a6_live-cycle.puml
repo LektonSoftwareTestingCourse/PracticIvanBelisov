@@ -1,0 +1,34 @@
+@startuml a6-2-transaction-lifecycle
+title A6.2. State-transition: Жизненный цикл транзакции и резервирования
+
+skinparam state {
+    BackgroundColor #FAFAFA
+    BorderColor #999999
+    ArrowColor #333333
+}
+
+state "Проверка в Authorization" as check #FFF3E0
+state "APPROVED:\nрезерв RESERVED, лимиты списаны" as approved #C8E6C9
+state "DECLINED:\nрезерва нет" as declined #FFCDD2
+state "В журнале:\nstatus APPROVED" as logA #E8F5E9
+state "В журнале:\nstatus DECLINED" as logD #FFEBEE
+state "ROLLED_BACK:\nрезерв отменён, баланс возвращён" as rolled #FFF9C4
+state "Не записана в журнал" as lost #E0E0E0
+
+[*] --> check : POST /api/transactions прошёл валидацию Gateway
+check --> approved : все проверки пройдены, код 00
+check --> declined : проверка не пройдена, коды 14, 05, 54, 51, 61, 96
+
+approved --> logA : публикация в RabbitMQ удалась
+approved --> rolled : публикация не удалась, POST /api/internal/rollback
+
+declined --> logD : публикация в RabbitMQ удалась
+declined --> lost : публикация не удалась
+
+rolled --> rolled : повторный откат\n(409 ALREADY_ROLLED_BACK)
+
+rolled --> [*] : клиент получает DECLINED, 96
+logA --> [*]
+logD --> [*]
+lost --> [*] : клиент получает исходный отказ
+@enduml
