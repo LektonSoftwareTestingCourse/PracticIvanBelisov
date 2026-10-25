@@ -1,0 +1,106 @@
+@startuml a4-3-sequence-reversal
+title Sequence Diagram - Reversal (Сбой брокера и откат транзакции)
+
+autonumber
+skinparam maxMessageSize 150
+skinparam sequence {
+    ArrowColor #333333
+    LifeLineBorderColor #999999
+    LifeLineBackgroundColor #EEEEEE
+    ParticipantBorderColor #999999
+    ParticipantBackgroundColor #FAFAFA
+}
+
+participant "Терминал" as T #BBDEFB
+participant "Gateway" as GW #FFE0B2
+participant "Switch" as SW #C8E6C9
+participant "Merchant" as MERCH #BBDEFB
+participant "Authorization" as AUTH #C8E6C9
+participant "Bin Lookup" as BIN #F8BBD0
+participant "Card Mgmt" as CMS #C8E6C9
+database "PostgreSQL" as DB #E0E0E0
+queue "RabbitMQ" as RMQ #FFF9C4
+participant "Logger" as LOG #D1C4E9
+
+T -> GW : POST /api/transactions
+activate GW
+
+GW -> SW : forward (route)
+activate SW
+
+SW -> AUTH : POST /api/internal/authorize
+activate AUTH
+
+AUTH -> CMS : GET /api/cards/{pan}
+activate CMS
+CMS -->> AUTH : Card
+deactivate CMS
+
+AUTH -> BIN : GET /api/bin/{bin}
+activate BIN
+BIN -->> AUTH : issuerId
+deactivate BIN
+
+AUTH -> DB : JDBC: upsertLimitUsage
+activate DB
+DB -->> AUTH : OK
+deactivate DB
+
+AUTH -> CMS : POST /api/cards/{pan}/reserve
+activate CMS
+CMS -> DB : JDBC: reservation RESERVED,\nbalance -= amount
+activate DB
+DB -->> CMS : OK
+deactivate DB
+CMS -->> AUTH : OK
+deactivate CMS
+
+AUTH -->> SW : APPROVED {rrn, authCode}
+deactivate AUTH
+
+SW -> MERCH : POST /api/simulator/merchant/fee\n(sync)
+activate MERCH
+MERCH -->> SW : fee
+deactivate MERCH
+
+SW -> RMQ : publish transaction (async)
+activate RMQ
+RMQ --x SW : NO ack / AmqpException\n(таймаут 2s)
+deactivate RMQ
+
+note right of SW
+  LoggerClient.log вернул false,
+  а статус был APPROVED.
+  Инициируется откат (rollback).
+end note
+
+SW -> AUTH : POST /api/internal/rollback
+activate AUTH
+
+AUTH -> CMS : POST /api/cards/{pan}/rollback
+activate CMS
+CMS -> DB : JDBC: reservation → ROLLED_BACK,\nbalance restored
+activate DB
+DB -->> CMS : OK
+deactivate DB
+CMS -->> AUTH : OK
+deactivate CMS
+
+AUTH -->> SW : 200 OK (rollback success)
+deactivate AUTH
+
+SW -->> GW : AuthorizationResponse.systemError()
+note right of SW: STATUS: DECLINED\nCODE: 96
+
+GW -->> T : HTTP 200 OK\n(body: DECLINED, code: 96)
+deactivate GW
+deactivate SW
+
+note over RMQ, LOG
+  В Transaction Logger записи о транзакции нет —
+  сообщение не опубликовано.
+  E2E-тест должен получить DECLINED от шлюза
+  и убедиться в отсутствии лога в БД.
+end note
+
+@enduml

@@ -1,0 +1,104 @@
+@startuml a4-1-sequence-happy
+title A4.1. Sequence Diagram - Happy path (Всё одобрено)
+
+autonumber
+skinparam maxMessageSize 150
+skinparam sequence {
+    ArrowColor #333333
+    LifeLineBorderColor #999999
+    LifeLineBackgroundColor #EEEEEE
+    ParticipantBorderColor #999999
+    ParticipantBackgroundColor #FAFAFA
+}
+
+participant "Терминал" as T #BBDEFB
+participant "Gateway" as GW #FFE0B2
+participant "Switch" as SW #C8E6C9
+participant "Merchant" as MERCH #BBDEFB
+participant "Authorization" as AUTH #C8E6C9
+participant "Bin Lookup" as BIN #F8BBD0
+participant "Card Mgmt" as CMS #C8E6C9
+database "PostgreSQL" as DB #E0E0E0
+queue "RabbitMQ" as RMQ #FFF9C4
+participant "Logger" as LOG #D1C4E9
+participant "Notification" as NS #D1C4E9
+participant "Dashboard" as WEB #FFF3E0
+
+T -> GW : POST /api/transactions (MTI 0100)
+activate GW
+
+GW -> GW : rate limit, валидация\n(mti=0100, pan 16 цифр, amount > 0)
+GW -> SW : forward (route)
+activate SW
+
+SW -> SW : routing: BIN → issuerId
+SW -> AUTH : POST /api/internal/authorize
+activate AUTH
+
+AUTH -> CMS : GET /api/cards/{pan}
+activate CMS
+CMS -->> AUTH : Card {status, balance, limits}
+deactivate CMS
+
+AUTH -> BIN : GET /api/bin/{bin}
+activate BIN
+BIN -->> AUTH : issuerId (или fallback)
+deactivate BIN
+
+AUTH -> AUTH : check статус / срок / лимиты / баланс
+
+AUTH -> DB : JDBC: upsertLimitUsage\n(дневной/месячный лимит)
+activate DB
+DB -->> AUTH : лимиты не превышены
+deactivate DB
+
+AUTH -> CMS : POST /api/cards/{pan}/reserve
+activate CMS
+CMS -> DB : JDBC: reservation RESERVED,\nbalance -= amount, outbox PENDING
+activate DB
+DB -->> CMS : OK
+deactivate DB
+CMS -->> AUTH : OK (balance reduced)
+deactivate CMS
+
+AUTH -->> SW : APPROVED {rrn, authCode}
+deactivate AUTH
+
+SW -> MERCH : POST /api/simulator/merchant/fee\n(sync)
+activate MERCH
+MERCH -->> SW : fee
+deactivate MERCH
+
+SW -> RMQ : publish transaction\n(async, publisher confirms 2s)
+activate RMQ
+RMQ -->> SW : ack
+deactivate RMQ
+
+SW -->> GW : APPROVED
+deactivate SW
+
+GW -->> T : HTTP 200 APPROVED
+deactivate GW
+
+RMQ -> LOG : consume transaction-log
+activate LOG
+LOG -> DB : INSERT transactions (status APPROVED)
+activate DB
+DB -->> LOG : OK
+deactivate DB
+LOG -> WEB : WebSocket /ws/transactions
+deactivate LOG
+
+CMS -> RMQ : publish card event from outbox
+activate RMQ
+RMQ -> NS : consume card-notifications
+deactivate RMQ
+activate NS
+
+NS -> DB : INSERT card_notifications
+activate DB
+DB -->> NS : OK
+deactivate DB
+deactivate NS
+
+@enduml

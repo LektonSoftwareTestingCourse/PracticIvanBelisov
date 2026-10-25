@@ -1,0 +1,77 @@
+@startuml a2-container
+
+title A2. Архитектура контейнеров платёжной системы
+
+top to bottom direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam ArrowThickness 1.5
+
+package "Эмуляторы внешних систем" {
+    rectangle "Terminal Simulator\n:8085" as TERM #BBDEFB
+    rectangle "Merchant-Acquirer\n:8084" as MERCH #BBDEFB
+    rectangle "Bin Lookup\n:8096" as BIN #BBDEFB
+}
+
+rectangle "Web Dashboard\n:3000\nReact + nginx" as WEB #FFF3E0
+rectangle "Gateway\n:8080\nSpring Cloud Gateway" as GW #FFE0B2
+rectangle "Switch\n:8082" as SW #C8E6C9
+rectangle "Authorization\n:8083" as AUTH #C8E6C9
+rectangle "Card-Management\n:8081" as CMS #C8E6C9
+
+rectangle "Transaction Logger\n:8088" as LOG #D1C4E9
+rectangle "Notification Service\n:8097" as NS #D1C4E9
+
+database "PostgreSQL\n:5432" as DB #E0E0E0
+queue "RabbitMQ\n:5672" as RMQ #FFF9C4
+
+TERM --> GW : POST /api/transactions
+TERM --> CMS : GET /api/cards
+MERCH --> GW : POST /api/transactions\nGET /api/cards
+WEB --> GW : HTTP /api/**
+
+LOG -[#7B1FA2,dotted]-> WEB : /ws/transactions\nWebSocket push
+
+GW --> SW : POST /api/internal/route
+GW --> CMS : HTTP /api/cards/**
+GW --> LOG : /api/transactions/search\n/api/transactions/export\n/api/dashboard/**
+GW --> TERM : /api/simulator/terminal/**
+GW --> MERCH : /api/simulator/merchant/**
+
+SW --> AUTH : POST /api/internal/authorize\nPOST /api/internal/rollback
+SW --> MERCH : POST /api/simulator/merchant/fee
+
+AUTH --> CMS : GET /api/cards/{pan}\nPOST reserve / rollback
+AUTH --> BIN : GET /api/bin/{bin}
+
+CMS --> DB : JDBC\ncards, reservations,\nreservation_rollbacks,\noutbox_event,\nbin_issuers
+
+AUTH --> DB : JDBC\nlimit_usage, rrn_seq
+LOG --> DB : JDBC\ntransactions
+NS --> DB : JDBC\ncard_notifications
+MERCH --> DB : JDBC\nmerchants, terminals,\nacquirer_fee
+
+SW ..> RMQ : Publish: smp.transactions\nRouting key: transaction.log
+RMQ ..> LOG : Consume: transaction-log
+
+CMS ..> RMQ : Outbox publisher\nExchange: smp.card-events\nRouting key: card.*
+RMQ ..> NS : Consume: card-notifications
+
+legend right
+  |= Тип линии |= Назначение |
+  | Сплошная | HTTP / JDBC |
+  | Пунктирная | AMQP / RabbitMQ |
+  | <color:#7B1FA2>Точечная</color> | WebSocket |
+
+  |= Цвет |= Категория |
+  | <back:#BBDEFB>   </back> | Внешние эмуляторы |
+  | <back:#FFF3E0>   </back> | Веб-интерфейс |
+  | <back:#FFE0B2>   </back> | API Gateway |
+  | <back:#C8E6C9>   </back> | Сервисы процессинга |
+  | <back:#D1C4E9>   </back> | Сервисы обработки событий |
+  | <back:#FFF9C4>   </back> | Брокер сообщений |
+  | <back:#E0E0E0>   </back> | Реляционная база данных |
+endlegend
+
+@enduml

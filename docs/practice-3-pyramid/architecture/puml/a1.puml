@@ -1,0 +1,49 @@
+@startuml a1-context
+
+title A1. C4 Level 1 (Context) - Границы СМП, внешние акторы и протоколы входа
+
+left to right direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontSize 12
+skinparam ArrowThickness 1.5
+skinparam rectangle {
+    BorderColor #444444
+}
+skinparam legend {
+    BackgroundColor #FAFAFA
+    BorderColor #999999
+}
+
+actor "Пользователь\nдашборда" as USER
+
+rectangle "Terminal Simulator" as TERM #BBDEFB
+rectangle "Merchant-Acquirer\nSimulator" as MERCH #BBDEFB
+
+rectangle "СМП - симулятор процессингового центра" as SMP #C8E6C9
+
+rectangle "Внешний BIN Lookup" as BIN #F8BBD0
+
+TERM --> SMP : HTTP POST /api/transactions
+TERM --> SMP : HTTP GET /api/cards
+
+MERCH --> SMP : HTTP POST /api/transactions\nHTTP GET /api/cards
+SMP --> MERCH : HTTP POST /api/simulator/merchant/fee\n(комиссия эквайрера)
+
+USER --> SMP : HTTP GET :3000\n/api/dashboard/, /api/transactions/
+SMP ..> USER : WebSocket /ws/transactions\n(новые транзакции)
+
+SMP --> BIN : HTTP GET /api/bin/{bin}
+
+legend right
+  | Обозначение | Смысл |
+  | <back:#C8E6C9>   </back> | границы системы |
+  | <back:#BBDEFB>   </back> | внешние системы |
+  | <back:#F8BBD0>   </back> | внешний API |
+  | -> | синхронный вызов (HTTP REST) |
+  | --> | асинхронный канал (WebSocket) |
+  Аутентификации на входе нет; ISO эмулируется
+  полями JSON, не бинарным протоколом
+endlegend
+
+@enduml
