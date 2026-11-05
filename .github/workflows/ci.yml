@@ -34,6 +34,7 @@ on:
     - 'scripts/smoke-test.ps1'
     - 'scripts/load-smoke.sh'
     - 'tz/**'
+  workflow_dispatch:
 
 # Отменяем предыдущие незавершённые прогоны в том же репозитории/ветке.
 concurrency:
