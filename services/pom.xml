@@ -30,6 +30,7 @@
         <lombok.version>1.18.38</lombok.version>
         <checkstyle.version>3.6.0</checkstyle.version>
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
+        <jacoco.version>0.8.12</jacoco.version>
         <!-- E2E require docker compose; enabled via -Pe2e-tests -->
         <skipE2eTests>true</skipE2eTests>
     </properties>
@@ -238,12 +239,54 @@
                         </annotationProcessorPaths>
                     </configuration>
                 </plugin>
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco.version}</version>
+                    <executions>
+                        <execution>
+                            <id>prepare-agent</id>
+                            <goals>
+                                <goal>prepare-agent</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>report</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>report</goal>
+                            </goals>
+                            <configuration>
+                                <excludes>
+                                    <exclude>**/Application.class</exclude>
+                                    <exclude>**/config/**</exclude>
+                                    <exclude>**/configs/**</exclude>
+                                    <exclude>**/configuration/**</exclude>
+                                    <exclude>**/properties/**</exclude>
+                                    <exclude>**/options/**</exclude>
+                                    <exclude>**/*Properties.class</exclude>
+                                    <exclude>**/dto/**</exclude>
+                                    <exclude>**/entities/**</exclude>
+                                    <exclude>**/*Entity.class</exclude>
+                                    <exclude>**/exception/**</exclude>
+                                    <exclude>**/exceptions/**</exclude>
+                                    <exclude>**/mappers/**</exclude>
+                                    <exclude>**/repositories/**</exclude>
+                                </excludes>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
             </plugin>
         </plugins>
     </build>
