@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "GET /health of Gateway (docs/api-spec.md, section 1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "service", "version", "services"],
+  "properties": {
+    "status": {"type": "string", "enum": ["ok", "degraded"]},
+    "service": {"type": "string"},
+    "version": {"type": "string"},
+    "services": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["switch", "authorization", "cardManagement", "logger"],
+      "properties": {
+        "switch": {"type": "string", "enum": ["ok", "unavailable"]},
+        "authorization": {"type": "string", "enum": ["ok", "unavailable"]},
+        "cardManagement": {"type": "string", "enum": ["ok", "unavailable"]},
+        "logger": {"type": "string", "enum": ["ok", "unavailable"]}
+      }
+    }
+  }
+}

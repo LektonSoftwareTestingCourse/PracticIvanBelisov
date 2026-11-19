@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "RollbackResponse of POST /api/internal/rollback (services/common RollbackResponse)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rrn", "responseCode", "status", "declineReason", "processingTimeMs"],
+  "properties": {
+    "rrn": {"type": "string", "pattern": "^\\d{12}$"},
+    "responseCode": {"type": "string", "pattern": "^\\d{2}$"},
+    "status": {"type": "string", "enum": ["APPROVED", "DECLINED"]},
+    "declineReason": {"type": ["string", "null"]},
+    "processingTimeMs": {"type": "integer", "minimum": 0}
+  }
+}

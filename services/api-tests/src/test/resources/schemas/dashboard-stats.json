@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "GET /api/dashboard/stats (docs/api-spec.md, section 5)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["totalTransactions", "approvedCount", "declinedCount", "approvalRate", "totalAmount", "averageAmount",
+    "avgProcessingTimeMs", "transactionsPerMinute"],
+  "properties": {
+    "totalTransactions": {"type": "integer", "minimum": 0},
+    "approvedCount": {"type": "integer", "minimum": 0},
+    "declinedCount": {"type": "integer", "minimum": 0},
+    "approvalRate": {"type": "number", "minimum": 0, "maximum": 1},
+    "totalAmount": {"type": "number", "minimum": 0},
+    "averageAmount": {"type": "number", "minimum": 0},
+    "avgProcessingTimeMs": {"type": "number", "minimum": 0},
+    "transactionsPerMinute": {"type": "number", "minimum": 0}
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "GET /api/transactions/search: total + array of Transaction (AuthorizationRequest + AuthorizationResponse + id, issuerId, acquiringFee, createdAt)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["total", "transactions"],
+  "properties": {
+    "total": {"type": "integer", "minimum": 0},
+    "transactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "mti", "stan", "rrn", "pan", "processingCode", "amount", "currencyCode", "terminalId",
+          "terminalType", "merchantId", "mcc", "acquirerId", "issuerId", "acquiringFee", "status", "declineReason",
+          "authCode", "processingTimeMs", "transmissionDateTime", "createdAt"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+          "mti": {"type": "string", "pattern": "^\\d{4}$"},
+          "stan": {"type": "string", "pattern": "^\\d{6}$"},
+          "rrn": {"type": ["string", "null"], "pattern": "^\\d{12}$"},
+          "pan": {"type": "string", "pattern": "^\\d{16}$"},
+          "processingCode": {"type": "string", "pattern": "^\\d{6}$"},
+          "amount": {"type": "number", "minimum": 0, "exclusiveMinimum": true},
+          "currencyCode": {"type": "string", "pattern": "^\\d{3}$"},
+          "terminalId": {"type": "string", "maxLength": 8},
+          "terminalType": {"type": ["string", "null"], "maxLength": 10},
+          "merchantId": {"type": "string", "maxLength": 15},
+          "mcc": {"type": "string", "pattern": "^\\d{4}$"},
+          "acquirerId": {"type": "string"},
+          "issuerId": {"type": ["string", "null"]},
+          "acquiringFee": {"type": ["number", "null"]},
+          "status": {"type": "string", "enum": ["APPROVED", "DECLINED"]},
+          "declineReason": {"type": ["string", "null"]},
+          "authCode": {"type": ["string", "null"]},
+          "processingTimeMs": {"type": ["integer", "null"], "minimum": 0},
+          "transmissionDateTime": {"type": "string"},
+          "createdAt": {"type": "string"}
+        }
+      }
+    }
+  }
+}

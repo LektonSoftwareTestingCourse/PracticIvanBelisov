@@ -14,7 +14,7 @@ endif
 
 # Специальные цели
 .PHONY: run stop clean build status logs smoke smoke-win test lint
-.PHONY: mvn-all mvn-clean mvn-test mvn-lint mvn-service
+.PHONY: mvn-all mvn-clean mvn-test mvn-lint mvn-service api-test
 .PHONY: npm-install npm-lint npm-test npm-build
 
 help:
@@ -28,6 +28,7 @@ help:
 	@echo "  make status        - Containers status"
 	@echo "  make logs          - Show logs (SERVICE=gateway)"
 	@echo "  make smoke         - Run smoke tests"
+	@echo "  make api-test      - Run API contract tests (practice 5) against the running stack"
 	@echo ""
 	@echo "General"
 	@echo "  make test          - Run all tests (Maven + NPM)"
@@ -73,6 +74,9 @@ logs:
 
 smoke:
 	$(SMOKE_CMD)
+
+api-test:
+	$(MVN) -Papi-tests -pl api-tests test
 
 # Общее
 test: mvn-test npm-test

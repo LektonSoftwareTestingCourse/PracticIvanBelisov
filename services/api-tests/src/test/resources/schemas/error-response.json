@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "ErrorResponse (services/common ErrorResponse): Gateway validation, Card Management, Transaction Logger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["error", "message", "timestamp", "serviceName", "retryAfterMs"],
+  "properties": {
+    "error": {"type": "string", "minLength": 1},
+    "message": {"type": "string"},
+    "timestamp": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"},
+    "serviceName": {"type": "string", "minLength": 1},
+    "retryAfterMs": {"type": ["string", "null"]}
+  }
+}

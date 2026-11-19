@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "POST /api/simulator/terminal/run and /api/simulator/merchant/run (docs/api-spec.md, section 4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["totalSubmitted", "approved", "declined", "elapsedMs", "transactions"],
+  "properties": {
+    "totalSubmitted": {"type": "integer", "minimum": 0},
+    "approved": {"type": "integer", "minimum": 0},
+    "declined": {"type": "integer", "minimum": 0},
+    "elapsedMs": {"type": "integer", "minimum": 0},
+    "transactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["mti", "stan", "responseCode", "status"],
+        "properties": {
+          "status": {"type": "string", "enum": ["APPROVED", "DECLINED"]},
+          "responseCode": {"type": "string", "pattern": "^\\d{2}$"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,109 @@
+name: API contract tests
+
+on:
+  push:
+    branches:
+    - '**'
+    paths:
+    - 'services/**'
+    - 'docker-compose.yaml'
+    - '.env.example'
+    - '.github/workflows/api-tests.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+    - 'services/**'
+    - 'docker-compose.yaml'
+    - '.env.example'
+    - '.github/workflows/api-tests.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: api-tests-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Normalize GHCR namespace to lowercase
+      run: echo "GHCR_USER=${OWNER,,}" >> "$GITHUB_ENV"
+      env:
+        OWNER: ${{ github.repository_owner }}
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v5
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: 'maven'
+
+    - name: Create .env file
+      run: cp .env.example .env
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Cache Maven/npm build mounts
+      uses: actions/cache@v4
+      with:
+        path: |
+          var-cache-m2
+          var-cache-npm
+        key: docker-build-mounts-${{ hashFiles('services/**/pom.xml', 'services/dashboard/package.json') }}
+        restore-keys: |
+          docker-build-mounts-
+
+    - name: Inject build mounts into Buildx
+      uses: reproducible-containers/buildkit-cache-dance@v3.1.2
+      with:
+        cache-map: |
+          {
+            "var-cache-m2": "/root/.m2",
+            "var-cache-npm": "/root/.npm"
+          }
+        skip-extraction: false
+
+    - name: Build Docker images
+      run: docker compose build
+
+    - name: Start the stack
+      run: docker compose up -d
+
+    - name: Wait until every container is healthy and Gateway reports all downstreams ok
+      run: |
+        for i in $(seq 1 60); do
+          not_ready=$(docker compose ps --format '{{.Health}}' | grep -cE 'starting|unhealthy' || true)
+          gateway=$(curl -s http://localhost:8080/health || true)
+          if [ "$not_ready" = "0" ] && echo "$gateway" | grep -q '"status":"ok"'; then
+            echo "stack is ready"
+            exit 0
+          fi
+          echo "waiting ($i/60): not ready containers=$not_ready"
+          sleep 5
+        done
+        docker compose ps
+        exit 1
+
+    - name: Run API contract tests
+      run: mvn -f services/pom.xml -Papi-tests -pl api-tests test
+
+    - name: Upload test reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: api-tests-surefire-reports
+        path: services/api-tests/target/surefire-reports/
+        if-no-files-found: warn
+
+    - name: Show logs on failure
+      if: failure()
+      run: docker compose logs --tail=200
+
+    - name: Cleanup
+      if: always()
+      run: docker compose down -v
